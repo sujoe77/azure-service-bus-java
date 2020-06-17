@@ -1,6 +1,6 @@
 package com.microsoft.azure.servicebus.primitives;
 
-import java.time.Duration;
+import org.threeten.bp.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;

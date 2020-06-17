@@ -4,9 +4,9 @@
 package com.microsoft.azure.servicebus;
 
 import java.net.URI;
-import java.time.Instant;
+import org.threeten.bp.Instant;
 import java.util.Collection;
-import java.util.concurrent.CompletableFuture;
+import java8.util.concurrent.CompletableFuture;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

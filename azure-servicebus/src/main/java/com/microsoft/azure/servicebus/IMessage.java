@@ -3,8 +3,8 @@
 
 package com.microsoft.azure.servicebus;
 
-import java.time.Duration;
-import java.time.Instant;
+import org.threeten.bp.Duration;
+import org.threeten.bp.Instant;
 import java.util.Map;
 import java.util.UUID;
 

@@ -3,8 +3,8 @@
 
 package com.microsoft.azure.servicebus;
 
-import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
+import org.threeten.bp.Instant;
+import java8.util.concurrent.CompletableFuture;
 
 import com.microsoft.azure.servicebus.primitives.ServiceBusException;
 

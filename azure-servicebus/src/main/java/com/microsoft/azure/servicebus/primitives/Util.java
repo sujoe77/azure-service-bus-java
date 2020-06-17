@@ -10,12 +10,12 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Date;
-import java.util.Locale;
-import java.util.Map;
-import java.util.UUID;
+
+import java8.util.function.Predicate;
+import org.threeten.bp.Duration;
+import org.threeten.bp.Instant;
+
+import java.util.*;
 
 import org.apache.qpid.proton.Proton;
 import org.apache.qpid.proton.amqp.Binary;
@@ -463,4 +463,5 @@ public class Util
     	// Default if link doesn't have the value
     	return ClientConstants.MAX_MESSAGE_LENGTH_BYTES;
     }
+
 }

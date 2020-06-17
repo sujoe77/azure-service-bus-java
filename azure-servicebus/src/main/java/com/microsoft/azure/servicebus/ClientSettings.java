@@ -1,6 +1,6 @@
 package com.microsoft.azure.servicebus;
 
-import java.time.Duration;
+import org.threeten.bp.Duration;
 
 import com.microsoft.azure.servicebus.primitives.ClientConstants;
 import com.microsoft.azure.servicebus.primitives.RetryPolicy;

@@ -3,7 +3,7 @@
 
 package com.microsoft.azure.servicebus;
 
-import java.util.concurrent.CompletableFuture;
+import java8.util.concurrent.CompletableFuture;
 
 /**
  * Defines the contract for registering the callback {@link QueueClient#registerMessageHandler(IMessageHandler)} and {@link SubscriptionClient#registerMessageHandler(IMessageHandler)} for {@link QueueClient} and {@link SubscriptionClient}.

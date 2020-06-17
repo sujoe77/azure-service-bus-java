@@ -4,8 +4,8 @@
  */
 package com.microsoft.azure.servicebus.primitives;
 
-import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
+import org.threeten.bp.Duration;
+import java8.util.concurrent.CompletableFuture;
 
 class SendWorkItem<T> extends WorkItem<T>
 {

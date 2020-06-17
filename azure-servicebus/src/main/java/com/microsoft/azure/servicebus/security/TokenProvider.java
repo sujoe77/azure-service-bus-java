@@ -1,8 +1,8 @@
 package com.microsoft.azure.servicebus.security;
 
 import java.net.MalformedURLException;
-import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
+import org.threeten.bp.Instant;
+import java8.util.concurrent.CompletableFuture;
 import java.util.concurrent.ForkJoinPool;
 
 import com.microsoft.aad.adal4j.AuthenticationContext;

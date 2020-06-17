@@ -4,8 +4,8 @@
 package com.microsoft.azure.servicebus;
 
 import java.net.URI;
-import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
+import org.threeten.bp.Instant;
+import java8.util.concurrent.CompletableFuture;
 
 import com.microsoft.azure.servicebus.primitives.MessagingEntityType;
 import com.microsoft.azure.servicebus.primitives.MessagingFactory;

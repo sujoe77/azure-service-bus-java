@@ -4,7 +4,7 @@
  */
 package com.microsoft.azure.servicebus.primitives;
 
-import java.time.Duration;
+import org.threeten.bp.Duration;
 
 /**
  *  RetryPolicy implementation where the delay between retries will grow in an exponential manner.

@@ -3,7 +3,7 @@
 
 package com.microsoft.azure.servicebus;
 
-import java.util.concurrent.CompletableFuture;
+import java8.util.concurrent.CompletableFuture;
 
 /**
  * Defines the contract for registering the session message processing callback {@link QueueClient#registerSessionHandler(ISessionHandler)} or {@link SubscriptionClient#registerSessionHandler(ISessionHandler)} for {@link QueueClient} and {@link SubscriptionClient}.

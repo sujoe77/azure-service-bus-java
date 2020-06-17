@@ -5,7 +5,7 @@
 package com.microsoft.azure.servicebus.primitives;
 
 import java.io.IOException;
-import java.time.*;
+import org.threeten.bp.*;
 import java.util.Properties;
 import java.util.UUID;
 

@@ -5,8 +5,8 @@
 package com.microsoft.azure.servicebus.primitives;
 
 import java.net.*;
-import java.time.*;
-import java.time.format.DateTimeParseException;
+import org.threeten.bp.*;
+import org.threeten.bp.format.DateTimeParseException;
 import java.util.*;
 import java.util.regex.*;
 

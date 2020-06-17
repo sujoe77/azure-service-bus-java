@@ -4,7 +4,7 @@
 package com.microsoft.azure.servicebus;
 
 import java.util.Collection;
-import java.util.concurrent.CompletableFuture;
+import java8.util.concurrent.CompletableFuture;
 
 import com.microsoft.azure.servicebus.primitives.ServiceBusException;
 

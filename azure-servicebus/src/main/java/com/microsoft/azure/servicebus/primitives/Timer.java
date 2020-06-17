@@ -4,7 +4,7 @@
  */
 package com.microsoft.azure.servicebus.primitives;
 
-import java.time.Duration;
+import org.threeten.bp.Duration;
 import java.util.HashSet;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;

@@ -3,7 +3,7 @@
 
 package com.microsoft.azure.servicebus;
 
-import java.time.Duration;
+import org.threeten.bp.Duration;
 import java.util.Locale;
 
 /**

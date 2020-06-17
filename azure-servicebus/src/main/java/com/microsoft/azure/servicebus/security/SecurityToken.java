@@ -1,6 +1,6 @@
 package com.microsoft.azure.servicebus.security;
 
-import java.time.Instant;
+import org.threeten.bp.Instant;
 
 /**
  * This class encapsulates the details of a security token.

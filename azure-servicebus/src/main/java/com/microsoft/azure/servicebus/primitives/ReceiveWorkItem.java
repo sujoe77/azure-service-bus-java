@@ -1,8 +1,8 @@
 package com.microsoft.azure.servicebus.primitives;
 
-import java.time.Duration;
+import org.threeten.bp.Duration;
 import java.util.Collection;
-import java.util.concurrent.CompletableFuture;
+import java8.util.concurrent.CompletableFuture;
 
 class ReceiveWorkItem extends WorkItem<Collection<MessageWithDeliveryTag>>
 {
