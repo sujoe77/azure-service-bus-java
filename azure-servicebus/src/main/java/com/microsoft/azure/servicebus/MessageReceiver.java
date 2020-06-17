@@ -4,8 +4,13 @@
 package com.microsoft.azure.servicebus;
 
 import java.net.URI;
-import java.time.Duration;
-import java.time.Instant;
+
+import java8.util.concurrent.CompletionStage;
+import java8.util.function.BiConsumer;
+import java8.util.function.Consumer;
+import java8.util.function.Function;
+import org.threeten.bp.Duration;
+import org.threeten.bp.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -13,7 +18,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
+import java8.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 
@@ -102,62 +107,70 @@ class MessageReceiver extends InitializableEntity implements IMessageReceiver, I
                 if (TRACE_LOGGER.isInfoEnabled()) {
                     TRACE_LOGGER.info("Creating MessagingFactory to namespace '{}'", this.namespaceEndpointURI.toString());
                 }
-                factoryFuture = MessagingFactory.createFromNamespaceEndpointURIAsyc(this.namespaceEndpointURI, this.clientSettings).thenAcceptAsync((f) ->
-                {
-                    this.messagingFactory = f;
-                    if (TRACE_LOGGER.isInfoEnabled()) {
-                        TRACE_LOGGER.info("Created MessagingFactory to namespace '{}'", this.namespaceEndpointURI.toString());
+                factoryFuture = MessagingFactory.createFromNamespaceEndpointURIAsyc(this.namespaceEndpointURI, this.clientSettings).thenAcceptAsync(new Consumer<MessagingFactory>() {
+                    @Override
+                    public void accept(MessagingFactory f) {
+                        MessageReceiver.this.messagingFactory = f;
+                        if (TRACE_LOGGER.isInfoEnabled()) {
+                            TRACE_LOGGER.info("Created MessagingFactory to namespace '{}'", MessageReceiver.this.namespaceEndpointURI.toString());
+                        }
                     }
                 });
             } else {
                 factoryFuture = CompletableFuture.completedFuture(null);
             }
 
-            return factoryFuture.thenComposeAsync((v) ->
-            {
-                CompletableFuture<CoreMessageReceiver> acceptReceiverFuture;
-                if (this.internalReceiver == null) {
+            return factoryFuture.thenComposeAsync(new Function<Void, CompletionStage<Void>>() {
+                @Override
+                public CompletionStage<Void> apply(Void v) {
+                    CompletableFuture<CoreMessageReceiver> acceptReceiverFuture;
+                    if (MessageReceiver.this.internalReceiver == null) {
 
-                    CompletableFuture<CoreMessageReceiver> receiverFuture;
-                    if (MessageReceiver.this.isSessionReceiver()) {
-                        TRACE_LOGGER.info("Creating SessionReceiver to entity '{}', requestedSessionId '{}', browsable session '{}', ReceiveMode '{}'", this.entityPath, this.getRequestedSessionId(), this.isBrowsableSession(), this.receiveMode);
-                        receiverFuture = CoreMessageReceiver.create(this.messagingFactory, StringUtil.getShortRandomString(), this.entityPath, this.getRequestedSessionId(), this.isBrowsableSession(), this.messagePrefetchCount, getSettleModePairForRecevieMode(this.receiveMode), this.entityType);
+                        CompletableFuture<CoreMessageReceiver> receiverFuture;
+                        if (MessageReceiver.this.isSessionReceiver()) {
+                            TRACE_LOGGER.info("Creating SessionReceiver to entity '{}', requestedSessionId '{}', browsable session '{}', ReceiveMode '{}'", MessageReceiver.this.entityPath, MessageReceiver.this.getRequestedSessionId(), MessageReceiver.this.isBrowsableSession(), MessageReceiver.this.receiveMode);
+                            receiverFuture = CoreMessageReceiver.create(MessageReceiver.this.messagingFactory, StringUtil.getShortRandomString(), MessageReceiver.this.entityPath, MessageReceiver.this.getRequestedSessionId(), MessageReceiver.this.isBrowsableSession(), MessageReceiver.this.messagePrefetchCount, getSettleModePairForRecevieMode(MessageReceiver.this.receiveMode), MessageReceiver.this.entityType);
+                        } else {
+                            TRACE_LOGGER.info("Creating MessageReceiver to entity '{}', ReceiveMode '{}'", MessageReceiver.this.entityPath, MessageReceiver.this.receiveMode);
+                            receiverFuture = CoreMessageReceiver.create(MessageReceiver.this.messagingFactory, StringUtil.getShortRandomString(), MessageReceiver.this.entityPath, MessageReceiver.this.messagePrefetchCount, getSettleModePairForRecevieMode(MessageReceiver.this.receiveMode), MessageReceiver.this.entityType);
+                        }
+
+                        acceptReceiverFuture = receiverFuture.whenCompleteAsync(new BiConsumer<CoreMessageReceiver, Throwable>() {
+                            @Override
+                            public void accept(CoreMessageReceiver r, Throwable coreReceiverCreationEx) {
+                                if (coreReceiverCreationEx == null) {
+                                    MessageReceiver.this.internalReceiver = r;
+                                    if (MessageReceiver.this.isSessionReceiver()) {
+                                        TRACE_LOGGER.info("Created SessionReceiver to entity '{}', requestedSessionId '{}', browsable session '{}', acceptedSessionId '{}'", MessageReceiver.this.entityPath, MessageReceiver.this.getRequestedSessionId(), MessageReceiver.this.isBrowsableSession(), MessageReceiver.this.internalReceiver.getSessionId());
+                                    } else {
+                                        TRACE_LOGGER.info("Created MessageReceiver to entity '{}'", MessageReceiver.this.entityPath);
+                                    }
+                                } else {
+                                    if (MessageReceiver.this.ownsMessagingFactory) {
+                                        //Close factory
+                                        MessageReceiver.this.messagingFactory.closeAsync();
+                                    }
+                                }
+                            }
+                        }, MessagingFactory.INTERNAL_THREAD_POOL);
                     } else {
-                        TRACE_LOGGER.info("Creating MessageReceiver to entity '{}', ReceiveMode '{}'", this.entityPath, this.receiveMode);
-                        receiverFuture = CoreMessageReceiver.create(this.messagingFactory, StringUtil.getShortRandomString(), this.entityPath, this.messagePrefetchCount, getSettleModePairForRecevieMode(this.receiveMode), this.entityType);
+                        acceptReceiverFuture = CompletableFuture.completedFuture(null);
                     }
 
-                    acceptReceiverFuture = receiverFuture.whenCompleteAsync((r, coreReceiverCreationEx) ->
-                    {
-                        if (coreReceiverCreationEx == null) {
-                            this.internalReceiver = r;
+                    return acceptReceiverFuture.thenRunAsync(new Runnable() {
+                        @Override
+                        public void run() {
+                            MessageReceiver.this.isInitialized = true;
+                            MessageReceiver.this.schedulePruningRequestResponseLockTokens();
+                            MessageReceiver.this.browser = new MessageBrowser(MessageReceiver.this);
                             if (MessageReceiver.this.isSessionReceiver()) {
-                                TRACE_LOGGER.info("Created SessionReceiver to entity '{}', requestedSessionId '{}', browsable session '{}', acceptedSessionId '{}'", this.entityPath, this.getRequestedSessionId(), this.isBrowsableSession(), this.internalReceiver.getSessionId());
+                                TRACE_LOGGER.info("Created MessageBrowser to entity '{}', sessionid '{}'", MessageReceiver.this.entityPath, MessageReceiver.this.internalReceiver.getSessionId());
                             } else {
-                                TRACE_LOGGER.info("Created MessageReceiver to entity '{}'", this.entityPath);
-                            }
-                        } else {
-                            if (this.ownsMessagingFactory) {
-                                //Close factory
-                                this.messagingFactory.closeAsync();
+                                TRACE_LOGGER.info("Created MessageBrowser to entity '{}'", MessageReceiver.this.entityPath);
                             }
                         }
                     }, MessagingFactory.INTERNAL_THREAD_POOL);
-                } else {
-                    acceptReceiverFuture = CompletableFuture.completedFuture(null);
                 }
-
-                return acceptReceiverFuture.thenRunAsync(() ->
-                {
-                    this.isInitialized = true;
-                    this.schedulePruningRequestResponseLockTokens();
-                    this.browser = new MessageBrowser(this);
-                    if (MessageReceiver.this.isSessionReceiver()) {
-                        TRACE_LOGGER.info("Created MessageBrowser to entity '{}', sessionid '{}'", this.entityPath, this.internalReceiver.getSessionId());
-                    } else {
-                        TRACE_LOGGER.info("Created MessageBrowser to entity '{}'", this.entityPath);
-                    }
-                }, MessagingFactory.INTERNAL_THREAD_POOL);
             }, MessagingFactory.INTERNAL_THREAD_POOL);
         }
     }
@@ -204,14 +217,22 @@ class MessageReceiver extends InitializableEntity implements IMessageReceiver, I
     }
 
     @Override
-    public CompletableFuture<Void> abandonAsync(UUID lockToken, Map<String, Object> propertiesToModify) {
+    public CompletableFuture<Void> abandonAsync(final UUID lockToken, final Map<String, Object> propertiesToModify) {
         this.ensurePeekLockReceiveMode();
         TRACE_LOGGER.debug("Abandoning message with lock token '{}'", lockToken);
-        return this.checkIfValidRequestResponseLockTokenAsync(lockToken).thenCompose((requestResponseLocked) -> {
-            if (requestResponseLocked) {
-                return this.internalReceiver.abandonMessageAsync(lockToken, propertiesToModify).thenRun(() -> MessageReceiver.this.requestResponseLockTokensToLockTimesMap.remove(lockToken));
-            } else {
-                return this.internalReceiver.abandonMessageAsync(Util.convertUUIDToDotNetBytes(lockToken), propertiesToModify);
+        return this.checkIfValidRequestResponseLockTokenAsync(lockToken).thenCompose(new Function<Boolean, CompletionStage<Void>>() {
+            @Override
+            public CompletionStage<Void> apply(Boolean requestResponseLocked) {
+                if (requestResponseLocked) {
+                    return MessageReceiver.this.internalReceiver.abandonMessageAsync(lockToken, propertiesToModify).thenRun(new Runnable() {
+                        @Override
+                        public void run() {
+                            MessageReceiver.this.requestResponseLockTokensToLockTimesMap.remove(lockToken);
+                        }
+                    });
+                } else {
+                    return MessageReceiver.this.internalReceiver.abandonMessageAsync(Util.convertUUIDToDotNetBytes(lockToken), propertiesToModify);
+                }
             }
         });
     }
@@ -228,14 +249,22 @@ class MessageReceiver extends InitializableEntity implements IMessageReceiver, I
 	*/
 
     @Override
-    public CompletableFuture<Void> completeAsync(UUID lockToken) {
+    public CompletableFuture<Void> completeAsync(final UUID lockToken) {
         this.ensurePeekLockReceiveMode();
         TRACE_LOGGER.debug("Completing message with lock token '{}'", lockToken);
-        return this.checkIfValidRequestResponseLockTokenAsync(lockToken).thenCompose((requestResponseLocked) -> {
-            if (requestResponseLocked) {
-                return this.internalReceiver.completeMessageAsync(lockToken).thenRun(() -> MessageReceiver.this.requestResponseLockTokensToLockTimesMap.remove(lockToken));
-            } else {
-                return this.internalReceiver.completeMessageAsync(Util.convertUUIDToDotNetBytes(lockToken));
+        return this.checkIfValidRequestResponseLockTokenAsync(lockToken).thenCompose(new Function<Boolean, CompletionStage<Void>>() {
+            @Override
+            public CompletionStage<Void> apply(Boolean requestResponseLocked) {
+                if (requestResponseLocked) {
+                    return MessageReceiver.this.internalReceiver.completeMessageAsync(lockToken).thenRun(new Runnable() {
+                        @Override
+                        public void run() {
+                            MessageReceiver.this.requestResponseLockTokensToLockTimesMap.remove(lockToken);
+                        }
+                    });
+                } else {
+                    return MessageReceiver.this.internalReceiver.completeMessageAsync(Util.convertUUIDToDotNetBytes(lockToken));
+                }
             }
         });
     }
@@ -264,14 +293,22 @@ class MessageReceiver extends InitializableEntity implements IMessageReceiver, I
     }
 
     @Override
-    public CompletableFuture<Void> deferAsync(UUID lockToken, Map<String, Object> propertiesToModify) {
+    public CompletableFuture<Void> deferAsync(final UUID lockToken, final Map<String, Object> propertiesToModify) {
         this.ensurePeekLockReceiveMode();
         TRACE_LOGGER.debug("Deferring message with lock token '{}'", lockToken);
-        return this.checkIfValidRequestResponseLockTokenAsync(lockToken).thenCompose((requestResponseLocked) -> {
-            if (requestResponseLocked) {
-                return this.internalReceiver.deferMessageAsync(lockToken, propertiesToModify).thenRun(() -> MessageReceiver.this.requestResponseLockTokensToLockTimesMap.remove(lockToken));
-            } else {
-                return this.internalReceiver.deferMessageAsync(Util.convertUUIDToDotNetBytes(lockToken), propertiesToModify);
+        return this.checkIfValidRequestResponseLockTokenAsync(lockToken).thenCompose(new Function<Boolean, CompletionStage<Void>>() {
+            @Override
+            public CompletionStage<Void> apply(Boolean requestResponseLocked) {
+                if (requestResponseLocked) {
+                    return MessageReceiver.this.internalReceiver.deferMessageAsync(lockToken, propertiesToModify).thenRun(new Runnable() {
+                        @Override
+                        public void run() {
+                            MessageReceiver.this.requestResponseLockTokensToLockTimesMap.remove(lockToken);
+                        }
+                    });
+                } else {
+                    return MessageReceiver.this.internalReceiver.deferMessageAsync(Util.convertUUIDToDotNetBytes(lockToken), propertiesToModify);
+                }
             }
         });
     }
@@ -312,14 +349,22 @@ class MessageReceiver extends InitializableEntity implements IMessageReceiver, I
     }
 
     @Override
-    public CompletableFuture<Void> deadLetterAsync(UUID lockToken, String deadLetterReason, String deadLetterErrorDescription, Map<String, Object> propertiesToModify) {
+    public CompletableFuture<Void> deadLetterAsync(final UUID lockToken, final String deadLetterReason, final String deadLetterErrorDescription, final Map<String, Object> propertiesToModify) {
         this.ensurePeekLockReceiveMode();
         TRACE_LOGGER.debug("Deadlettering message with lock token '{}'", lockToken);
-        return this.checkIfValidRequestResponseLockTokenAsync(lockToken).thenCompose((requestResponseLocked) -> {
-            if (requestResponseLocked) {
-                return this.internalReceiver.deadLetterMessageAsync(lockToken, deadLetterReason, deadLetterErrorDescription, propertiesToModify).thenRun(() -> MessageReceiver.this.requestResponseLockTokensToLockTimesMap.remove(lockToken));
-            } else {
-                return this.internalReceiver.deadLetterMessageAsync(Util.convertUUIDToDotNetBytes(lockToken), deadLetterReason, deadLetterErrorDescription, propertiesToModify);
+        return this.checkIfValidRequestResponseLockTokenAsync(lockToken).thenCompose(new Function<Boolean, CompletionStage<Void>>() {
+            @Override
+            public CompletionStage<Void> apply(Boolean requestResponseLocked) {
+                if (requestResponseLocked) {
+                    return MessageReceiver.this.internalReceiver.deadLetterMessageAsync(lockToken, deadLetterReason, deadLetterErrorDescription, propertiesToModify).thenRun(new Runnable() {
+                        @Override
+                        public void run() {
+                            MessageReceiver.this.requestResponseLockTokensToLockTimesMap.remove(lockToken);
+                        }
+                    });
+                } else {
+                    return MessageReceiver.this.internalReceiver.deadLetterMessageAsync(Util.convertUUIDToDotNetBytes(lockToken), deadLetterReason, deadLetterErrorDescription, propertiesToModify);
+                }
             }
         });
     }
@@ -361,14 +406,16 @@ class MessageReceiver extends InitializableEntity implements IMessageReceiver, I
 
     @Override
     public CompletableFuture<IMessage> receiveAsync(Duration serverWaitTime) {
-        return this.internalReceiver.receiveAsync(1, serverWaitTime).thenApplyAsync(c ->
-        {
-            if (c == null)
-                return null;
-            else if (c.isEmpty())
-                return null;
-            else
-                return MessageConverter.convertAmqpMessageToBrokeredMessage(c.toArray(new MessageWithDeliveryTag[0])[0]);
+        return this.internalReceiver.receiveAsync(1, serverWaitTime).thenApplyAsync(new Function<Collection<MessageWithDeliveryTag>, IMessage>() {
+            @Override
+            public IMessage apply(Collection<MessageWithDeliveryTag> c) {
+                if (c == null)
+                    return null;
+                else if (c.isEmpty())
+                    return null;
+                else
+                    return MessageConverter.convertAmqpMessageToBrokeredMessage(c.toArray(new MessageWithDeliveryTag[0])[0]);
+            }
         }, MessagingFactory.INTERNAL_THREAD_POOL);
     }
 
@@ -379,14 +426,16 @@ class MessageReceiver extends InitializableEntity implements IMessageReceiver, I
 
     @Override
     public CompletableFuture<Collection<IMessage>> receiveBatchAsync(int maxMessageCount, Duration serverWaitTime) {
-        return this.internalReceiver.receiveAsync(maxMessageCount, serverWaitTime).thenApplyAsync(c ->
-        {
-            if (c == null)
-                return null;
-            else if (c.isEmpty())
-                return null;
-            else
-                return convertAmqpMessagesWithDeliveryTagsToBrokeredMessages(c);
+        return this.internalReceiver.receiveAsync(maxMessageCount, serverWaitTime).thenApplyAsync(new Function<Collection<MessageWithDeliveryTag>, Collection<IMessage>>() {
+            @Override
+            public Collection<IMessage> apply(Collection<MessageWithDeliveryTag> c) {
+                if (c == null)
+                    return null;
+                else if (c.isEmpty())
+                    return null;
+                else
+                    return MessageReceiver.this.convertAmqpMessagesWithDeliveryTagsToBrokeredMessages(c);
+            }
         }, MessagingFactory.INTERNAL_THREAD_POOL);
     }
 
@@ -394,28 +443,32 @@ class MessageReceiver extends InitializableEntity implements IMessageReceiver, I
     public CompletableFuture<IMessage> receiveDeferredMessageAsync(long sequenceNumber) {
         ArrayList<Long> list = new ArrayList<>();
         list.add(sequenceNumber);
-        return this.receiveDeferredMessageBatchAsync(list).thenApplyAsync(c ->
-        {
-            if (c == null)
-                return null;
-            else if (c.isEmpty())
-                return null;
-            else
-                return c.toArray(new Message[0])[0];
+        return this.receiveDeferredMessageBatchAsync(list).thenApplyAsync(new Function<Collection<IMessage>, IMessage>() {
+            @Override
+            public IMessage apply(Collection<IMessage> c) {
+                if (c == null)
+                    return null;
+                else if (c.isEmpty())
+                    return null;
+                else
+                    return c.toArray(new Message[0])[0];
+            }
         }, MessagingFactory.INTERNAL_THREAD_POOL);
     }
 
     @Override
     public CompletableFuture<Collection<IMessage>> receiveDeferredMessageBatchAsync(Collection<Long> sequenceNumbers) {
         TRACE_LOGGER.debug("Receiving messages by sequence numbers '{}' from entity '{}'", sequenceNumbers, this.entityPath);
-        return this.internalReceiver.receiveDeferredMessageBatchAsync(sequenceNumbers.toArray(new Long[0])).thenApplyAsync(c ->
-        {
-            if (c == null)
-                return null;
-            else if (c.isEmpty())
-                return null;
-            else
-                return convertAmqpMessagesWithLockTokensToBrokeredMessages(c);
+        return this.internalReceiver.receiveDeferredMessageBatchAsync(sequenceNumbers.toArray(new Long[0])).thenApplyAsync(new Function<Collection<MessageWithLockToken>, Collection<IMessage>>() {
+            @Override
+            public Collection<IMessage> apply(Collection<MessageWithLockToken> c) {
+                if (c == null)
+                    return null;
+                else if (c.isEmpty())
+                    return null;
+                else
+                    return MessageReceiver.this.convertAmqpMessagesWithLockTokensToBrokeredMessages(c);
+            }
         }, MessagingFactory.INTERNAL_THREAD_POOL);
     }
 
@@ -432,20 +485,22 @@ class MessageReceiver extends InitializableEntity implements IMessageReceiver, I
             }
             CompletableFuture<Void> closeReceiverFuture = this.internalReceiver.closeAsync();
 
-            return closeReceiverFuture.thenComposeAsync((v) ->
-            {
-                if (MessageReceiver.this.isSessionReceiver()) {
-                    TRACE_LOGGER.info("Closed SessionReceiver to entity '{}', browsable session '{}', sessionId '{}'", this.entityPath, this.isBrowsableSession(), this.internalReceiver.getSessionId());
-                } else {
-                    TRACE_LOGGER.info("Closed MessageReceiver to entity '{}'", this.entityPath);
-                }
-                if (MessageReceiver.this.ownsMessagingFactory) {
-                    if (TRACE_LOGGER.isInfoEnabled()) {
-                        TRACE_LOGGER.info("Closing MessagingFactory associated with namespace '{}'", this.namespaceEndpointURI.toString());
+            return closeReceiverFuture.thenComposeAsync(new Function<Void, CompletionStage<Void>>() {
+                @Override
+                public CompletionStage<Void> apply(Void v) {
+                    if (MessageReceiver.this.isSessionReceiver()) {
+                        TRACE_LOGGER.info("Closed SessionReceiver to entity '{}', browsable session '{}', sessionId '{}'", MessageReceiver.this.entityPath, MessageReceiver.this.isBrowsableSession(), MessageReceiver.this.internalReceiver.getSessionId());
+                    } else {
+                        TRACE_LOGGER.info("Closed MessageReceiver to entity '{}'", MessageReceiver.this.entityPath);
                     }
-                    return MessageReceiver.this.messagingFactory.closeAsync();
-                } else {
-                    return CompletableFuture.completedFuture(null);
+                    if (MessageReceiver.this.ownsMessagingFactory) {
+                        if (TRACE_LOGGER.isInfoEnabled()) {
+                            TRACE_LOGGER.info("Closing MessagingFactory associated with namespace '{}'", MessageReceiver.this.namespaceEndpointURI.toString());
+                        }
+                        return MessageReceiver.this.messagingFactory.closeAsync();
+                    } else {
+                        return CompletableFuture.completedFuture(null);
+                    }
                 }
             }, MessagingFactory.INTERNAL_THREAD_POOL);
         } else {
@@ -529,11 +584,16 @@ class MessageReceiver extends InitializableEntity implements IMessageReceiver, I
     public CompletableFuture<Instant> renewMessageLockAsync(IMessage message) {
         ArrayList<IMessage> list = new ArrayList<>();
         list.add(message);
-        return this.renewMessageLockBatchAsync(list).thenApply((c) -> c.toArray(new Instant[0])[0]);
+        return this.renewMessageLockBatchAsync(list).thenApply(new Function<Collection<Instant>, Instant>() {
+            @Override
+            public Instant apply(Collection<Instant> c) {
+                return c.toArray(new Instant[0])[0];
+            }
+        });
     }
 
     //	@Override
-    public CompletableFuture<Collection<Instant>> renewMessageLockBatchAsync(Collection<? extends IMessage> messages) {
+    public CompletableFuture<Collection<Instant>> renewMessageLockBatchAsync(final Collection<? extends IMessage> messages) {
         this.ensurePeekLockReceiveMode();
 
         if(messages == null || messages.size() == 0)
@@ -541,7 +601,7 @@ class MessageReceiver extends InitializableEntity implements IMessageReceiver, I
         	throw new UnsupportedOperationException("Message collection is null or empty. Locks cannot be renewed.");
         }
         
-        UUID[] lockTokens = new UUID[messages.size()];
+        final UUID[] lockTokens = new UUID[messages.size()];
         int messageIndex = 0;
         for (IMessage message : messages) {
             UUID lockToken = message.getLockToken();
@@ -555,23 +615,25 @@ class MessageReceiver extends InitializableEntity implements IMessageReceiver, I
             TRACE_LOGGER.debug("Renewing message locks of lock tokens '{}'", Arrays.toString(lockTokens));
         }
         return this.internalReceiver.renewMessageLocksAsync(lockTokens).thenApplyAsync(
-                (newLockedUntilTimes) ->
-                {
-                    if (TRACE_LOGGER.isDebugEnabled()) {
-                        TRACE_LOGGER.debug("Renewed message locks of lock tokens '{}'", Arrays.toString(lockTokens));
-                    }
-                    // Assuming both collections are of same size and in same order (order doesn't really matter as all instants in the response are same).
-                    Iterator<? extends IMessage> messageIterator = messages.iterator();
-                    Iterator<Instant> lockTimeIterator = newLockedUntilTimes.iterator();
-                    while (messageIterator.hasNext() && lockTimeIterator.hasNext()) {
-                        Message message = (Message) messageIterator.next();
-                        Instant lockedUntilUtc = lockTimeIterator.next();
-                        message.setLockedUntilUtc(lockedUntilUtc);
-                        if (this.requestResponseLockTokensToLockTimesMap.containsKey(message.getLockToken())) {
-                            this.requestResponseLockTokensToLockTimesMap.put(message.getLockToken(), lockedUntilUtc);
+                new Function<Collection<Instant>, Collection<Instant>>() {
+                    @Override
+                    public Collection<Instant> apply(Collection<Instant> newLockedUntilTimes) {
+                        if (TRACE_LOGGER.isDebugEnabled()) {
+                            TRACE_LOGGER.debug("Renewed message locks of lock tokens '{}'", Arrays.toString(lockTokens));
                         }
+                        // Assuming both collections are of same size and in same order (order doesn't really matter as all instants in the response are same).
+                        Iterator<? extends IMessage> messageIterator = messages.iterator();
+                        Iterator<Instant> lockTimeIterator = newLockedUntilTimes.iterator();
+                        while (messageIterator.hasNext() && lockTimeIterator.hasNext()) {
+                            Message message = (Message) messageIterator.next();
+                            Instant lockedUntilUtc = lockTimeIterator.next();
+                            message.setLockedUntilUtc(lockedUntilUtc);
+                            if (MessageReceiver.this.requestResponseLockTokensToLockTimesMap.containsKey(message.getLockToken())) {
+                                MessageReceiver.this.requestResponseLockTokensToLockTimesMap.put(message.getLockToken(), lockedUntilUtc);
+                            }
+                        }
+                        return newLockedUntilTimes;
                     }
-                    return newLockedUntilTimes;
                 },
                 MessagingFactory.INTERNAL_THREAD_POOL
         );

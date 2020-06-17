@@ -1,9 +1,9 @@
 package com.microsoft.azure.servicebus.security;
 
 import java.security.InvalidKeyException;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
+import org.threeten.bp.Duration;
+import org.threeten.bp.Instant;
+import java8.util.concurrent.CompletableFuture;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,7 +52,7 @@ public class SharedAccessSignatureTokenProvider extends TokenProvider
     }
     
     @Override
-    public CompletableFuture<SecurityToken> getSecurityTokenAsync(String audience) {
+    public CompletableFuture<SecurityToken> getSecurityTokenAsync(final String audience) {
         if(this.sasToken != null)
         {
             SecurityToken securityToken = new SecurityToken(SecurityTokenType.SAS, audience, this.sasToken, Instant.now(), this.sasTokenValidUntil);
@@ -60,14 +60,17 @@ public class SharedAccessSignatureTokenProvider extends TokenProvider
         }
         else
         {
-            CompletableFuture<SecurityToken> tokenGeneratingFuture = new CompletableFuture<>();
-            MessagingFactory.INTERNAL_THREAD_POOL.execute(() -> {
-                try {
-                    String genereatedSASToken = SASUtil.generateSharedAccessSignatureToken(this.sasKeyName, this.sasKey, audience, this.tokenValidityInSeconds);
-                    tokenGeneratingFuture.complete(new SecurityToken(SecurityTokenType.SAS, audience, genereatedSASToken, Instant.now(), Instant.now().plus(Duration.ofSeconds(this.tokenValidityInSeconds))));
-                } catch (InvalidKeyException e) {
-                    TRACE_LOGGER.error("SharedAccessSignature token generation failed.", e);
-                    tokenGeneratingFuture.completeExceptionally(e);
+            final CompletableFuture<SecurityToken> tokenGeneratingFuture = new CompletableFuture<>();
+            MessagingFactory.INTERNAL_THREAD_POOL.execute(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        String genereatedSASToken = SASUtil.generateSharedAccessSignatureToken(SharedAccessSignatureTokenProvider.this.sasKeyName, SharedAccessSignatureTokenProvider.this.sasKey, audience, SharedAccessSignatureTokenProvider.this.tokenValidityInSeconds);
+                        tokenGeneratingFuture.complete(new SecurityToken(SecurityTokenType.SAS, audience, genereatedSASToken, Instant.now(), Instant.now().plus(Duration.ofSeconds(SharedAccessSignatureTokenProvider.this.tokenValidityInSeconds))));
+                    } catch (InvalidKeyException e) {
+                        TRACE_LOGGER.error("SharedAccessSignature token generation failed.", e);
+                        tokenGeneratingFuture.completeExceptionally(e);
+                    }
                 }
             });
             

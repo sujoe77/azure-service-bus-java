@@ -6,9 +6,9 @@ import java.io.Reader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
+import org.threeten.bp.Duration;
+import org.threeten.bp.Instant;
+import java8.util.concurrent.CompletableFuture;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,20 +34,20 @@ public class ManagedServiceIdentityTokenProvider extends TokenProvider
     private static final String SECRET_HEADER_NAME = "Secret";
     
     @Override
-    public CompletableFuture<SecurityToken> getSecurityTokenAsync(String audience) {
-        String addAudienceForSB = SecurityConstants.SERVICEBUS_AAD_AUDIENCE_RESOURCE_URL;
-        CompletableFuture<SecurityToken> tokenGeneratingFuture = new CompletableFuture<>();
-        MessagingFactory.INTERNAL_THREAD_POOL.execute(() -> {
-            try
-            {
-                MSIToken msiToken = getMSIToken(addAudienceForSB);
-                SecurityToken generatedToken = new SecurityToken(SecurityTokenType.JWT, audience, msiToken.getAccessToken(), Instant.EPOCH.plus(Duration.ofSeconds(msiToken.getNotBefore())), Instant.now().plus(Duration.ofSeconds(msiToken.getExpiresIn())));
-                tokenGeneratingFuture.complete(generatedToken);
-            }
-            catch(IOException ioe)
-            {
-                TRACE_LOGGER.error("ManagedServiceIdentity token generation failed.", ioe);
-                tokenGeneratingFuture.completeExceptionally(ioe);
+    public CompletableFuture<SecurityToken> getSecurityTokenAsync(final String audience) {
+        final String addAudienceForSB = SecurityConstants.SERVICEBUS_AAD_AUDIENCE_RESOURCE_URL;
+        final CompletableFuture<SecurityToken> tokenGeneratingFuture = new CompletableFuture<>();
+        MessagingFactory.INTERNAL_THREAD_POOL.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    MSIToken msiToken = getMSIToken(addAudienceForSB);
+                    SecurityToken generatedToken = new SecurityToken(SecurityTokenType.JWT, audience, msiToken.getAccessToken(), Instant.EPOCH.plus(Duration.ofSeconds(msiToken.getNotBefore())), Instant.now().plus(Duration.ofSeconds(msiToken.getExpiresIn())));
+                    tokenGeneratingFuture.complete(generatedToken);
+                } catch (IOException ioe) {
+                    TRACE_LOGGER.error("ManagedServiceIdentity token generation failed.", ioe);
+                    tokenGeneratingFuture.completeExceptionally(ioe);
+                }
             }
         });
         

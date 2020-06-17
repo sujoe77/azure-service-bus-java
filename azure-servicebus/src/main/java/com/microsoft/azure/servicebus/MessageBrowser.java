@@ -3,16 +3,16 @@
 
 package com.microsoft.azure.servicebus;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.concurrent.CompletableFuture;
-
+import com.microsoft.azure.servicebus.primitives.MessagingFactory;
+import com.microsoft.azure.servicebus.primitives.ServiceBusException;
+import java8.util.concurrent.CompletableFuture;
+import java8.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.microsoft.azure.servicebus.primitives.MessagingFactory;
-import com.microsoft.azure.servicebus.primitives.ServiceBusException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
 
 final class MessageBrowser implements IMessageBrowser {
     private static final Logger TRACE_LOGGER = LoggerFactory.getLogger(MessageBrowser.class);
@@ -58,15 +58,17 @@ final class MessageBrowser implements IMessageBrowser {
 
     @Override
     public CompletableFuture<IMessage> peekAsync(long fromSequenceNumber) {
-        return this.peekBatchAsync(fromSequenceNumber, 1).thenApplyAsync((c) ->
-        {
-            IMessage message = null;
-            Iterator<IMessage> iterator = c.iterator();
-            if (iterator.hasNext()) {
-                message = iterator.next();
-                iterator.remove();
+        return this.peekBatchAsync(fromSequenceNumber, 1).thenApplyAsync(new Function<Collection<IMessage>, IMessage>() {
+            @Override
+            public IMessage apply(Collection<IMessage> c) {
+                IMessage message = null;
+                Iterator<IMessage> iterator = c.iterator();
+                if (iterator.hasNext()) {
+                    message = iterator.next();
+                    iterator.remove();
+                }
+                return message;
             }
-            return message;
         }, MessagingFactory.INTERNAL_THREAD_POOL);
     }
 
@@ -76,7 +78,7 @@ final class MessageBrowser implements IMessageBrowser {
     }
 
     @Override
-    public CompletableFuture<Collection<IMessage>> peekBatchAsync(long fromSequenceNumber, int messageCount) {
+    public CompletableFuture<Collection<IMessage>> peekBatchAsync(final long fromSequenceNumber, int messageCount) {
         CompletableFuture<Collection<org.apache.qpid.proton.message.Message>> peekFuture;
         if (this.isReceiveSideBrowser) {
             String sessionId = this.messageReceiver.isSessionReceiver() ? this.messageReceiver.getInternalReceiver().getSessionId() : null;
@@ -87,26 +89,28 @@ final class MessageBrowser implements IMessageBrowser {
             peekFuture = this.messageSender.getInternalSender().peekMessagesAsync(fromSequenceNumber, messageCount);
         }
 
-        return peekFuture.thenApplyAsync((peekedMessages) ->
-        {
-            ArrayList<IMessage> convertedMessages = new ArrayList<IMessage>();
-            if (peekedMessages != null) {
-                TRACE_LOGGER.debug("Browsing messages from sequence number '{}' returned '{}' messages", fromSequenceNumber, peekedMessages.size());
-                long sequenceNumberOfLastMessage = 0;
-                for (org.apache.qpid.proton.message.Message message : peekedMessages) {
-                    Message convertedMessage = MessageConverter.convertAmqpMessageToBrokeredMessage(message);
-                    sequenceNumberOfLastMessage = convertedMessage.getSequenceNumber();
-                    convertedMessages.add(convertedMessage);
+        return peekFuture.thenApplyAsync(new Function<Collection<org.apache.qpid.proton.message.Message>, Collection<IMessage>>() {
+            @Override
+            public Collection<IMessage> apply(Collection<org.apache.qpid.proton.message.Message> peekedMessages) {
+                ArrayList<IMessage> convertedMessages = new ArrayList<IMessage>();
+                if (peekedMessages != null) {
+                    TRACE_LOGGER.debug("Browsing messages from sequence number '{}' returned '{}' messages", fromSequenceNumber, peekedMessages.size());
+                    long sequenceNumberOfLastMessage = 0;
+                    for (org.apache.qpid.proton.message.Message message : peekedMessages) {
+                        Message convertedMessage = MessageConverter.convertAmqpMessageToBrokeredMessage(message);
+                        sequenceNumberOfLastMessage = convertedMessage.getSequenceNumber();
+                        convertedMessages.add(convertedMessage);
+                    }
+
+                    if (sequenceNumberOfLastMessage > 0) {
+                        MessageBrowser.this.lastPeekedSequenceNumber = sequenceNumberOfLastMessage;
+                    }
+                } else {
+                    TRACE_LOGGER.debug("Browsing messages from sequence number '{}' returned no messages", fromSequenceNumber);
                 }
 
-                if (sequenceNumberOfLastMessage > 0) {
-                    this.lastPeekedSequenceNumber = sequenceNumberOfLastMessage;
-                }
-            } else {
-                TRACE_LOGGER.debug("Browsing messages from sequence number '{}' returned no messages", fromSequenceNumber);
+                return convertedMessages;
             }
-
-            return convertedMessages;
         }, MessagingFactory.INTERNAL_THREAD_POOL);
     }
 }

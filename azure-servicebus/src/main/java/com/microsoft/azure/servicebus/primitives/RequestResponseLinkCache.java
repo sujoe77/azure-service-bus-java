@@ -2,8 +2,9 @@ package com.microsoft.azure.servicebus.primitives;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.concurrent.CompletableFuture;
+import java8.util.concurrent.CompletableFuture;
 
+import java8.util.function.BiFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -95,37 +96,32 @@ class RequestResponseLinkcache
         
         private void createRequestResponseLinkAsync()
         {
-            String requestResponseLinkPath = RequestResponseLink.getManagementNodeLinkPath(this.entityPath);
+            final String requestResponseLinkPath = RequestResponseLink.getManagementNodeLinkPath(this.entityPath);
             String sasTokenAudienceURI = String.format(ClientConstants.SAS_TOKEN_AUDIENCE_FORMAT, this.underlyingFactory.getHostName(), this.entityPath);
             TRACE_LOGGER.debug("Creating requestresponselink to '{}'", requestResponseLinkPath);
-            RequestResponseLink.createAsync(this.underlyingFactory, StringUtil.getShortRandomString() + "-RequestResponse", requestResponseLinkPath, sasTokenAudienceURI, this.entityType).handleAsync((rrlink, ex) ->
-            {
-                synchronized (this.lock)
-                {
-                    if(ex == null)
-                    {
-                        TRACE_LOGGER.info("Created requestresponselink to '{}'", requestResponseLinkPath);
-                        if(this.isClosed)
-                        {
-                        	// Factory is likely closed. Close the link too
-                        	rrlink.closeAsync();
-                        }
-                        else
-                        {
-                        	this.requestResponseLink = rrlink;
-                            this.completeWaiters(null);
+            RequestResponseLink.createAsync(this.underlyingFactory, StringUtil.getShortRandomString() + "-RequestResponse", requestResponseLinkPath, sasTokenAudienceURI, this.entityType).handleAsync(new BiFunction<RequestResponseLink, Throwable, Object>() {
+                @Override
+                public Object apply(RequestResponseLink rrlink, Throwable ex) {
+                    synchronized (RequestResponseLinkWrapper.this.lock) {
+                        if (ex == null) {
+                            TRACE_LOGGER.info("Created requestresponselink to '{}'", requestResponseLinkPath);
+                            if (RequestResponseLinkWrapper.this.isClosed) {
+                                // Factory is likely closed. Close the link too
+                                rrlink.closeAsync();
+                            } else {
+                                RequestResponseLinkWrapper.this.requestResponseLink = rrlink;
+                                RequestResponseLinkWrapper.this.completeWaiters(null);
+                            }
+                        } else {
+                            Throwable cause = ExceptionUtil.extractAsyncCompletionCause(ex);
+                            TRACE_LOGGER.error("Creating requestresponselink to '{}' failed.", requestResponseLinkPath, cause);
+                            RequestResponseLinkcache.this.removeWrapperFromCache(RequestResponseLinkWrapper.this.entityPath);
+                            RequestResponseLinkWrapper.this.completeWaiters(cause);
                         }
                     }
-                    else
-                    {
-                        Throwable cause = ExceptionUtil.extractAsyncCompletionCause(ex);
-                        TRACE_LOGGER.error("Creating requestresponselink to '{}' failed.", requestResponseLinkPath, cause);
-                        RequestResponseLinkcache.this.removeWrapperFromCache(this.entityPath);
-                        this.completeWaiters(cause);
-                    }
+
+                    return null;
                 }
-                
-                return null;
             }, MessagingFactory.INTERNAL_THREAD_POOL);
         }
         

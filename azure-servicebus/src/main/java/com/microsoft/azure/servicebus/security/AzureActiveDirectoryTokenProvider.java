@@ -1,8 +1,8 @@
 package com.microsoft.azure.servicebus.security;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
+import org.threeten.bp.Duration;
+import org.threeten.bp.Instant;
+import java8.util.concurrent.CompletableFuture;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -113,15 +113,25 @@ public class AzureActiveDirectoryTokenProvider extends TokenProvider
         }
         
         @Override
-        public void onFailure(Throwable authException) {
+        public void onFailure(final Throwable authException) {
             TRACE_LOGGER.error("Getting token from Azure Active Directory failed", authException);
-            MessagingFactory.INTERNAL_THREAD_POOL.execute(() -> {this.tokenGeneratingFutue.completeExceptionally(authException);});
+            MessagingFactory.INTERNAL_THREAD_POOL.execute(new Runnable() {
+                @Override
+                public void run() {
+                    FutureCompletingAuthenticationCallback.this.tokenGeneratingFutue.completeExceptionally(authException);
+                }
+            });
         }
 
         @Override
         public void onSuccess(AuthenticationResult authResult) {
-            SecurityToken generatedToken = new SecurityToken(SecurityTokenType.JWT, this.audience, authResult.getAccessToken(), Instant.now(), Instant.now().plus(Duration.ofSeconds(authResult.getExpiresAfter())));
-            MessagingFactory.INTERNAL_THREAD_POOL.execute(() -> {tokenGeneratingFutue.complete(generatedToken);});
+            final SecurityToken generatedToken = new SecurityToken(SecurityTokenType.JWT, this.audience, authResult.getAccessToken(), Instant.now(), Instant.now().plus(Duration.ofSeconds(authResult.getExpiresAfter())));
+            MessagingFactory.INTERNAL_THREAD_POOL.execute(new Runnable() {
+                @Override
+                public void run() {
+                    tokenGeneratingFutue.complete(generatedToken);
+                }
+            });
         }
         
     }

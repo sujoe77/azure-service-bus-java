@@ -3,21 +3,19 @@
 
 package com.microsoft.azure.servicebus;
 
-import java.net.URI;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.concurrent.CompletableFuture;
-
+import com.microsoft.azure.servicebus.primitives.*;
+import java8.util.concurrent.CompletableFuture;
+import java8.util.concurrent.CompletionStage;
+import java8.util.function.BiFunction;
+import java8.util.function.Consumer;
+import java8.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.threeten.bp.Instant;
 
-import com.microsoft.azure.servicebus.primitives.CoreMessageSender;
-import com.microsoft.azure.servicebus.primitives.ExceptionUtil;
-import com.microsoft.azure.servicebus.primitives.MessagingEntityType;
-import com.microsoft.azure.servicebus.primitives.MessagingFactory;
-import com.microsoft.azure.servicebus.primitives.ServiceBusException;
-import com.microsoft.azure.servicebus.primitives.StringUtil;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collection;
 
 final class MessageSender extends InitializableEntity implements IMessageSender {
     private static final Logger TRACE_LOGGER = LoggerFactory.getLogger(MessageSender.class);
@@ -28,7 +26,7 @@ final class MessageSender extends InitializableEntity implements IMessageSender 
     private CoreMessageSender internalSender = null;
     private boolean isInitialized = false;
     private URI namespaceEndpointURI;
-    private ClientSettings clientSettings;    
+    private ClientSettings clientSettings;
 
     private MessageSender() {
         super(StringUtil.getShortRandomString());
@@ -67,40 +65,47 @@ final class MessageSender extends InitializableEntity implements IMessageSender 
                 if (TRACE_LOGGER.isInfoEnabled()) {
                     TRACE_LOGGER.info("Creating MessagingFactory to namespace '{}'", this.namespaceEndpointURI.toString());
                 }
-                factoryFuture = MessagingFactory.createFromNamespaceEndpointURIAsyc(this.namespaceEndpointURI, this.clientSettings).thenAcceptAsync((f) ->
-                {
-                    this.messagingFactory = f;
-                    if (TRACE_LOGGER.isInfoEnabled()) {
-                        TRACE_LOGGER.info("Created MessagingFactory to namespace '{}'", this.namespaceEndpointURI.toString());
+                factoryFuture = MessagingFactory.createFromNamespaceEndpointURIAsyc(this.namespaceEndpointURI, this.clientSettings).thenAcceptAsync(new Consumer<MessagingFactory>() {
+                    @Override
+                    public void accept(MessagingFactory f) {
+                        MessageSender.this.messagingFactory = f;
+                        if (TRACE_LOGGER.isInfoEnabled()) {
+                            TRACE_LOGGER.info("Created MessagingFactory to namespace '{}'", MessageSender.this.namespaceEndpointURI.toString());
+                        }
                     }
                 });
             } else {
                 factoryFuture = CompletableFuture.completedFuture(null);
             }
 
-            return factoryFuture.thenComposeAsync((v) ->
-            {
-                TRACE_LOGGER.info("Creating MessageSender to entity '{}'", this.entityPath);
-                CompletableFuture<CoreMessageSender> senderFuture = CoreMessageSender.create(this.messagingFactory, StringUtil.getShortRandomString(), this.entityPath, this.entityType);
-                CompletableFuture<Void> postSenderCreationFuture = new CompletableFuture<Void>();
-                senderFuture.handleAsync((s, coreSenderCreationEx) -> {
-                    if (coreSenderCreationEx == null) {
-                        this.internalSender = s;
-                        this.isInitialized = true;
-                        TRACE_LOGGER.info("Created MessageSender to entity '{}'", this.entityPath);
-                        postSenderCreationFuture.complete(null);
-                    } else {
-                        Throwable cause = ExceptionUtil.extractAsyncCompletionCause(coreSenderCreationEx);
-                        TRACE_LOGGER.error("Creating MessageSender to entity '{}' failed", this.entityPath, cause);
-                        if (this.ownsMessagingFactory) {
-                            // Close factory
-                            this.messagingFactory.closeAsync();
+            return factoryFuture.thenComposeAsync(new Function<Void, CompletionStage<Void>>() {
+                @Override
+                public CompletionStage<Void> apply(Void v) {
+                    TRACE_LOGGER.info("Creating MessageSender to entity '{}'", MessageSender.this.entityPath);
+                    CompletableFuture<CoreMessageSender> senderFuture = CoreMessageSender.create(MessageSender.this.messagingFactory, StringUtil.getShortRandomString(), MessageSender.this.entityPath, MessageSender.this.entityType);
+                    final CompletableFuture<Void> postSenderCreationFuture = new CompletableFuture<Void>();
+                    senderFuture.handleAsync(new BiFunction<CoreMessageSender, Throwable, Object>() {
+                        @Override
+                        public Object apply(CoreMessageSender s, Throwable coreSenderCreationEx) {
+                            if (coreSenderCreationEx == null) {
+                                MessageSender.this.internalSender = s;
+                                MessageSender.this.isInitialized = true;
+                                TRACE_LOGGER.info("Created MessageSender to entity '{}'", MessageSender.this.entityPath);
+                                postSenderCreationFuture.complete(null);
+                            } else {
+                                Throwable cause = ExceptionUtil.extractAsyncCompletionCause(coreSenderCreationEx);
+                                TRACE_LOGGER.error("Creating MessageSender to entity '{}' failed", MessageSender.this.entityPath, cause);
+                                if (MessageSender.this.ownsMessagingFactory) {
+                                    // Close factory
+                                    MessageSender.this.messagingFactory.closeAsync();
+                                }
+                                postSenderCreationFuture.completeExceptionally(cause);
+                            }
+                            return null;
                         }
-                        postSenderCreationFuture.completeExceptionally(cause);
-                    }
-                    return null;
-                }, MessagingFactory.INTERNAL_THREAD_POOL);
-                return postSenderCreationFuture;
+                    }, MessagingFactory.INTERNAL_THREAD_POOL);
+                    return postSenderCreationFuture;
+                }
             }, MessagingFactory.INTERNAL_THREAD_POOL);
         }
     }
@@ -139,17 +144,19 @@ final class MessageSender extends InitializableEntity implements IMessageSender 
     protected CompletableFuture<Void> onClose() {
         if (this.isInitialized) {
             TRACE_LOGGER.info("Closing message sender to entity '{}'", this.entityPath);
-            return this.internalSender.closeAsync().thenComposeAsync((v) ->
-            {
-                TRACE_LOGGER.info("Closed message sender to entity '{}'", this.entityPath);
-                if (MessageSender.this.ownsMessagingFactory) {
-                    if (TRACE_LOGGER.isInfoEnabled()) {
-                        TRACE_LOGGER.info("Closing MessagingFactory associated with namespace '{}'", this.namespaceEndpointURI.toString());
-                    }
+            return this.internalSender.closeAsync().thenComposeAsync(new Function<Void, CompletionStage<Void>>() {
+                @Override
+                public CompletionStage<Void> apply(Void v) {
+                    TRACE_LOGGER.info("Closed message sender to entity '{}'", MessageSender.this.entityPath);
+                    if (MessageSender.this.ownsMessagingFactory) {
+                        if (TRACE_LOGGER.isInfoEnabled()) {
+                            TRACE_LOGGER.info("Closing MessagingFactory associated with namespace '{}'", MessageSender.this.namespaceEndpointURI.toString());
+                        }
 
-                    return MessageSender.this.messagingFactory.closeAsync();
-                } else {
-                    return CompletableFuture.completedFuture(null);
+                        return MessageSender.this.messagingFactory.closeAsync();
+                    } else {
+                        return CompletableFuture.completedFuture(null);
+                    }
                 }
             }, MessagingFactory.INTERNAL_THREAD_POOL);
         } else {
@@ -166,7 +173,12 @@ final class MessageSender extends InitializableEntity implements IMessageSender 
     public CompletableFuture<Long> scheduleMessageAsync(IMessage message, Instant scheduledEnqueueTimeUtc) {
         message.setScheduledEnqueueTimeUtc(scheduledEnqueueTimeUtc);
         org.apache.qpid.proton.message.Message amqpMessage = MessageConverter.convertBrokeredMessageToAmqpMessage((Message) message);
-        return this.internalSender.scheduleMessageAsync(new org.apache.qpid.proton.message.Message[]{amqpMessage}, this.messagingFactory.getClientSetttings().getOperationTimeout()).thenApply(sequenceNumbers -> sequenceNumbers[0]);
+        return this.internalSender.scheduleMessageAsync(new org.apache.qpid.proton.message.Message[]{amqpMessage}, this.messagingFactory.getClientSetttings().getOperationTimeout()).thenApply(new Function<long[], Long>() {
+            @Override
+            public Long apply(long[] sequenceNumbers) {
+                return sequenceNumbers[0];
+            }
+        });
     }
 
     @Override
