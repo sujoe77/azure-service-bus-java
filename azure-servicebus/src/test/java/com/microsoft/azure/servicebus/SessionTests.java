@@ -1,9 +1,9 @@
 package com.microsoft.azure.servicebus;
 
 import java.net.URI;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
+import org.threeten.bp.Duration;
+import org.threeten.bp.Instant;
+import java8.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import org.junit.After;
 import org.junit.AfterClass;

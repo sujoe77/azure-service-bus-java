@@ -1,6 +1,6 @@
 package com.microsoft.azure.servicebus;
 
-import java.time.Instant;
+import org.threeten.bp.Instant;
 
 public abstract class TestSessionHandler implements ISessionHandler
 {

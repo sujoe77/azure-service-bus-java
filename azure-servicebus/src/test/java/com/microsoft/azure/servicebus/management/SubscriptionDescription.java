@@ -1,6 +1,6 @@
 package com.microsoft.azure.servicebus.management;
 
-import java.time.Duration;
+import org.threeten.bp.Duration;
 
 public class SubscriptionDescription extends ResourceDescripton {
     private static final String ATOM_XML_FORMAT = "<entry xmlns=\"http://www.w3.org/2005/Atom\">"

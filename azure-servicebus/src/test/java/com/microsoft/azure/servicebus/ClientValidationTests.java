@@ -1,7 +1,7 @@
 package com.microsoft.azure.servicebus;
 
 import java.net.URI;
-import java.util.concurrent.CompletableFuture;
+import java8.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.AfterClass;

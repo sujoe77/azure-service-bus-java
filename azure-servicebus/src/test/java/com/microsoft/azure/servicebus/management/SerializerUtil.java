@@ -1,6 +1,6 @@
 package com.microsoft.azure.servicebus.management;
 
-import java.time.Duration;
+import org.threeten.bp.Duration;
 
 // Fields that require special serializations
 public class SerializerUtil {

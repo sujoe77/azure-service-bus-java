@@ -1,6 +1,6 @@
 package com.microsoft.azure.servicebus.management;
 
-import java.time.Duration;
+import org.threeten.bp.Duration;
 
 public class QueueDescription extends ResourceDescripton{
     // Supports only a limited set of properties, just for unit tests.. There are some quirks too. Order of xml elements also matters

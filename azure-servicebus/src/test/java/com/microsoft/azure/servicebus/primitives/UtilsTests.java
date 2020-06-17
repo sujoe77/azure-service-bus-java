@@ -1,6 +1,6 @@
 package com.microsoft.azure.servicebus.primitives;
 
-import java.time.Instant;
+import org.threeten.bp.Instant;
 import java.util.UUID;
 
 import org.junit.Test;
